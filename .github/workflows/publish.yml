@@ -21,11 +21,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/configure-pages@v5
+      - name: Check editor and publishing
+        run: |
+          node --test tests/editor.test.cjs
+          python3 -m unittest discover -s tests -p "test_*.py"
       - name: Generate pages from Markdown
         run: python3 scripts/build.py
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+

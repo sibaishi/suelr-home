@@ -62,7 +62,15 @@
     if (n.date && (!/^\d{4}-\d{2}-\d{2}$/.test(n.date) || !Number.isFinite(Date.parse(n.date)) || new Date(n.date).toISOString().slice(0,10) !== n.date)) throw new Error('日期格式应为有效的 YYYY-MM-DD。');
     serialize(n);
   }
-  const api = {escape, markdown, parse, serialize, validate};
+  function publication(note, existing) {
+    validate(note);
+    const raw = serialize(note, false);
+    const base = 'https://github.com/sibaishi/suelr-home/';
+    const create = base + 'new/main?filename=' + encodeURIComponent('content/' + note.slug + '.md') + '&value=' + encodeURIComponent(raw);
+    const prefilled = !existing && create.length <= 7000;
+    return {raw, prefilled, url: existing ? base + 'edit/main/content/' + note.slug + '.md' : prefilled ? create : base + 'new/main?filename=' + encodeURIComponent('content/' + note.slug + '.md')};
+  }
+  const api = {escape, markdown, parse, serialize, validate, publication};
   if (typeof module !== 'undefined') module.exports = api;
   else host.NoteCore = api;
 })(globalThis);

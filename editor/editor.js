@@ -4,6 +4,7 @@
   const KEY = 'suelr-home:note-drafts:v1';
   const fields = ['title','slug','category','label','date','summary','body'];
   let drafts = [], current, dirty = false, timer, storageReady = true, conflict = false;
+  let publishedSlugs = new Set();
   function error(message = '') { $('error-status').textContent = message; }
   function message(text) { $('save-status').textContent = text; }
   function read() { const n = {...current}; for (const key of fields) n[key] = $(key).value; return n; }
@@ -85,16 +86,44 @@
   $('publish-note').addEventListener('click', () => {
     try {
       const n = read(); C.validate(n); flush();
-      $('publish-filename').textContent = 'content/' + n.slug + '.md'; $('publish-dialog').showModal();
+      const plan = C.publication(n, publishedSlugs.has(n.slug));
+      $('publish-filename').textContent = n.slug + '.md';
+      $('publish-source').value = plan.raw; $('github-edit').href = plan.url;
+      $('copy-publish').hidden = plan.prefilled;
+      $('publish-copy-status').textContent = '';
+      $('publish-instructions').textContent = plan.prefilled
+        ? '文章已准备好。前往 GitHub 后，检查内容并点击 Commit changes 确认提交即可。'
+        : '先复制文章内容，再前往 GitHub，将编辑区内容全选替换并粘贴，点击 Commit changes 确认提交。';
+      $('publish-dialog').showModal();
     } catch (e) {error(e.message);}
   });
   $('download-publish').addEventListener('click', () => { try {const n=read(); C.validate(n); download(n, false);} catch(e) {error(e.message);} });
+  $('copy-publish').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('publish-source').value);
+      $('publish-copy-status').textContent = '已复制。现在前往 GitHub 粘贴并确认提交。';
+    } catch {
+      $('publish-fallback').open = true; $('publish-source').focus(); $('publish-source').select();
+      $('publish-copy-status').textContent = '浏览器未允许自动复制，内容已选中，请手动复制。';
+    }
+  });
   $('close-publish').addEventListener('click', () => $('publish-dialog').close());
   window.addEventListener('beforeunload', e => {if (dirty) {e.preventDefault(); e.returnValue = '';}});
   window.addEventListener('storage', e => { if (e.key === KEY || e.key === null) {conflict = true; clearTimeout(timer); error('另一标签页已修改草稿。为避免覆盖，请先导出当前草稿，再刷新此页面。');} });
+  const openingId = current.id, openingUpdated = current.updated;
   fetch('published.json', {cache:'no-cache'}).then(r => {if (!r.ok) throw new Error(); return r.json();}).then(notes => {
     if (!Array.isArray(notes)) throw new Error();
+    publishedSlugs = new Set(notes.map(n => n.slug));
     $('published-status').textContent = '打开后创建本地副本，提交前不会改变线上文章。';
+    const requested = new URLSearchParams(window.location.search).get('edit');
+    if (requested && !dirty && current.id === openingId && current.updated === openingUpdated) {
+      const n = notes.find(n => n.slug === requested);
+      if (n) {
+        const saved = drafts.filter(d => d.slug === requested).sort((a,b) => b.updated.localeCompare(a.updated))[0];
+        if (saved) load(saved);
+        else {load(fresh(C.parse(n.raw, n.slug + '.md'))); dirty = true; save();}
+      } else error('找不到这篇随笔，请从已发布列表选择。');
+    }
     for (const n of notes) {
       const button = document.createElement('button'); button.type='button'; button.textContent=n.title;
       button.addEventListener('click', () => { try {if (flush()) {load(fresh(C.parse(n.raw, n.slug + '.md'))); dirty=true; save();}} catch(e) {error(e.message);} }); $('published-list').append(button);

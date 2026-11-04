@@ -50,7 +50,7 @@ function workspace(initial, {blocked=false}={}) {
   const context={NoteCore:C,crypto:require('node:crypto').webcrypto,Date,Blob,URL,console,
     localStorage:{getItem:()=>initial,setItem:(key,value)=>{if(blocked)throw new Error('quota');writes.push(JSON.parse(value));}},
     document:{getElementById:get,querySelectorAll:()=>[],createElement:()=>new Element(),body:new Element()},
-    window:{addEventListener:(event,fn)=>{handlers[event]=fn;}},
+    URLSearchParams,window:{location:{search:''},addEventListener:(event,fn)=>{handlers[event]=fn;}},
     fetch:async()=>({ok:true,json:async()=>[]}),confirm:()=>true,setTimeout:()=>1,clearTimeout:()=>{}};
   vm.runInNewContext(readFileSync('editor/editor.js','utf8'),context);
   return {get,writes,handlers,click:id=>get(id).listeners.click(),input:()=>get('note-form').listeners.input()};
@@ -83,4 +83,17 @@ test('Markdown import creates a new draft and preserves the previous draft', asy
   await w.get('import-note').listeners.change({target:{files:[file],value:'imported.md'}});
   assert.equal(w.writes.at(-1).length,2);assert.equal(w.get('slug').value,'imported');
   assert.equal(w.get('body').value,'## Imported\n\n正文');
+});
+
+test('publishing prefills new notes and routes existing notes to their editor', () => {
+  const n=C.parse(readFileSync('content/designing-order.md','utf8'),'designing-order.md');
+  const create=C.publication({...n,body:n.body.repeat(10)},false);
+  assert.equal(create.prefilled,false); // Long Unicode article uses clipboard to avoid oversized URLs.
+  assert.ok(create.url.includes('/new/main?filename='));
+  const short=C.publication({...n,body:'Hello',title:'Hi',summary:'Text',label:'Note'},false);
+  assert.equal(short.prefilled,true);
+  assert.equal(new URL(short.url).searchParams.get('value'),short.raw);
+  const edit=C.publication(n,true);
+  assert.equal(edit.url,'https://github.com/sibaishi/suelr-home/edit/main/content/designing-order.md');
+  assert.equal(C.parse(edit.raw).draft,false);
 });

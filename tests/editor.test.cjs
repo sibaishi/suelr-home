@@ -4,7 +4,7 @@ const {readFileSync} = require('node:fs');
 const C = require('../editor/core.js');
 
 test('published Markdown survives import/export including punctuation and Unicode', () => {
-  const raw = readFileSync('content/designing-order.md','utf8');
+  const raw = readFileSync('tests/fixtures/example.md','utf8');
   const note = C.parse(raw,'designing-order.md');
   C.validate(note);
   const exported = C.serialize(note, true);
@@ -27,7 +27,7 @@ test('preview treats raw HTML and unsafe links as text', () => {
   assert.ok(html.includes('&lt;img')); assert.ok(html.includes('&quot;hello&quot;'));
 });
 test('publish rejects path traversal, frontmatter injection, empty body and invalid dates', () => {
-  const n = C.parse(readFileSync('content/designing-order.md','utf8'),'designing-order.md');
+  const n = C.parse(readFileSync('tests/fixtures/example.md','utf8'),'designing-order.md');
   for (const change of [{slug:'../evil'},{title:'Hello\ndraft: false'},{body:' '},{date:'2026-02-30'},{category:'Unknown'}]) assert.throws(() => C.validate({...n,...change}));
 });
 
@@ -86,8 +86,8 @@ test('Markdown import creates a new draft and preserves the previous draft', asy
 });
 
 test('publishing prefills new notes and routes existing notes to their editor', () => {
-  const n=C.parse(readFileSync('content/designing-order.md','utf8'),'designing-order.md');
-  const create=C.publication({...n,body:n.body.repeat(10)},false);
+  const n=C.parse(readFileSync('tests/fixtures/example.md','utf8'),'designing-order.md');
+  const create=C.publication({...n,body:'正文'.repeat(2000)},false);
   assert.equal(create.prefilled,false); // Long Unicode article uses clipboard to avoid oversized URLs.
   assert.ok(create.url.includes('/new/main?filename='));
   const short=C.publication({...n,body:'Hello',title:'Hi',summary:'Text',label:'Note'},false);

@@ -124,3 +124,16 @@ test('clipboard denial keeps draft and exposes selected content instead of a fai
   assert.equal(w.urls.length,0);assert.equal(w.get('publish-dialog').open,true);
   assert.equal(w.get('publish-fallback').open,true);assert.ok(w.get('publish-source').value.includes('Hello world'));
 });
+
+test('published deletion links target the exact Markdown file and do not delete local drafts', async () => {
+  const w=workspace(null,{notes:[{slug:'test-note',title:'Hello',raw:''}]});
+  await new Promise(setImmediate);fillPublish(w);w.input();
+  assert.equal(w.get('delete-published').hidden,false);
+  assert.equal(w.get('delete-published').href,'https://github.com/sibaishi/suelr-home/delete/main/content/test-note.md');
+  const row=w.get('published-list').children[0];
+  assert.equal(row.children[1].href,w.get('delete-published').href);
+  assert.equal(row.children[1].target,'_blank');
+  w.get('slug').value='unpublished';w.input();
+  assert.equal(w.get('delete-published').hidden,true);
+  assert.equal(w.urls.length,0);
+});

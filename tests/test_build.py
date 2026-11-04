@@ -14,7 +14,7 @@ class BuildTests(unittest.TestCase):
   self.root=Path(self.tmp.name)/'site'
   shutil.copytree(ROOT,self.root,ignore=shutil.ignore_patterns('_site','.git','__pycache__'))
   # Integration tests own their content; real articles may be added, edited or removed.
-  shutil.rmtree(self.root/'content')
+  shutil.rmtree(self.root/'content',ignore_errors=True)
   (self.root/'content').mkdir()
   shutil.copy2(ROOT/'tests/fixtures/example.md',self.root/'content/example.md')
  def run_build(self,ok=True):
@@ -49,6 +49,13 @@ class BuildTests(unittest.TestCase):
   site=self.root/'_site'
   self.assertEqual(len(json.loads((site/'editor/published.json').read_text())),8)
   self.assertIn('共 8 篇记录',(site/'index.html').read_text())
+ def test_deleting_all_articles_is_supported(self):
+  shutil.rmtree(self.root/'content')
+  self.run_build()
+  site=self.root/'_site'
+  self.assertEqual(json.loads((site/'editor/published.json').read_text()),[])
+  self.assertEqual(list((site/'notes').iterdir()),[])
+  self.assertIn('共 0 篇记录',(site/'index.html').read_text())
  def test_bad_metadata_fails_build(self):
   (self.root/'content/bad.md').write_text('---\ntitle: Invalid\n---\nBody')
   self.run_build(ok=False)

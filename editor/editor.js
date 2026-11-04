@@ -8,7 +8,16 @@
   function error(message = '') { $('error-status').textContent = message; }
   function message(text) { $('save-status').textContent = text; }
   function read() { const n = {...current}; for (const key of fields) n[key] = $(key).value; return n; }
+  function deletionUrl(slug) {
+    return 'https://github.com/sibaishi/suelr-home/delete/main/content/' + encodeURIComponent(slug) + '.md';
+  }
+  function updateDeleteAction() {
+    const slug = $('slug').value;
+    $('delete-published').hidden = !publishedSlugs.has(slug);
+    $('delete-published').href = publishedSlugs.has(slug) ? deletionUrl(slug) : '#';
+  }
   function renderList() {
+    updateDeleteAction();
     $('draft-list').replaceChildren();
     for (const n of [...drafts].sort((a,b) => b.updated.localeCompare(a.updated))) {
       const button = document.createElement('button'); button.type = 'button';
@@ -40,6 +49,7 @@
     return {id:crypto.randomUUID(),title:'',slug:'',category:'设计与创作',label:'随笔',date:'',summary:'',body:'',updated:new Date().toISOString(),...data};
   }
   function preview() {
+    updateDeleteAction();
     const n = read();
     $('preview-title').textContent = n.title || '未命名随笔'; $('preview-category').textContent = n.category + ' / NOTES';
     $('preview-summary').textContent = n.summary;
@@ -123,7 +133,7 @@
   const openingId = current.id, openingUpdated = current.updated;
   fetch('published.json', {cache:'no-cache'}).then(r => {if (!r.ok) throw new Error(); return r.json();}).then(notes => {
     if (!Array.isArray(notes)) throw new Error();
-    publishedSlugs = new Set(notes.map(n => n.slug)); publishedReady = true;
+    publishedSlugs = new Set(notes.map(n => n.slug)); publishedReady = true; updateDeleteAction();
     $('published-status').textContent = '打开后创建本地副本，提交前不会改变线上文章。';
     const requested = new URLSearchParams(window.location.search).get('edit');
     if (requested && !dirty && current.id === openingId && current.updated === openingUpdated) {
@@ -136,7 +146,11 @@
     }
     for (const n of notes) {
       const button = document.createElement('button'); button.type='button'; button.textContent=n.title;
-      button.addEventListener('click', () => { try {if (flush()) {load(fresh(C.parse(n.raw, n.slug + '.md'))); dirty=true; save();}} catch(e) {error(e.message);} }); $('published-list').append(button);
+      button.addEventListener('click', () => { try {if (flush()) {load(fresh(C.parse(n.raw, n.slug + '.md'))); dirty=true; save();}} catch(e) {error(e.message);} });
+      const row = document.createElement('div'); row.className = 'published-row';
+      const remove = document.createElement('a'); remove.href = deletionUrl(n.slug); remove.target = '_blank'; remove.rel = 'noopener';
+      remove.textContent = '删除'; remove.setAttribute('aria-label', '在 GitHub 删除「' + n.title + '」');
+      row.append(button); row.append(remove); $('published-list').append(row);
     }
   }).catch(() => {$('published-status').textContent = '暂时无法读取文章列表。可以从 content 目录下载 Markdown 后导入。';});
 })();

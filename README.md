@@ -35,6 +35,8 @@ python3 -m http.server 8002 --bind 127.0.0.1 --directory _site
 - 点击「发布到 GitHub」直接跳转，新文章在链接长度允许时会自动填入 GitHub 新建页，检查后确认提交即可。编辑现有文章或长文章时，点击发布会自动复制内容并跳转到 GitHub 编辑页，全选替换内容并提交，无需下载上传。若浏览器阻止复制，可展开手动复制区或下载正式文件。提交到 main 后 Actions 自动发布；仍需要 GitHub 登录和确认提交，不保存访问令牌。
 
 
+- 删除文章：已发布列表每篇旁有「删除」；打开文章后也有「删除线上文章」。直接打开对应 GitHub 删除页，在 GitHub 确认提交后，Actions 自动从首页、文章列表和发布产物中移除文章。本地草稿单独保留；「删除草稿」仅影响当前浏览器。
+
 ## 发布
 
 GitHub 仓库 Settings → Pages → Build and deployment → Source 选择 **GitHub Actions**。工作流 `.github/workflows/publish.yml` 在 main 提交或手动运行时，先运行验证、再构建并仅上传 `_site/`，随后部署至该仓库的 Pages。首次切换发布源需有仓库管理权限。

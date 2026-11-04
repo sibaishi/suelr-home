@@ -4,7 +4,7 @@
   const KEY = 'suelr-home:note-drafts:v1';
   const fields = ['title','slug','category','label','date','summary','body'];
   let drafts = [], current, dirty = false, timer, storageReady = true, conflict = false;
-  let publishedSlugs = new Set();
+  let publishedSlugs = new Set(), publishedReady = false;
   function error(message = '') { $('error-status').textContent = message; }
   function message(text) { $('save-status').textContent = text; }
   function read() { const n = {...current}; for (const key of fields) n[key] = $(key).value; return n; }
@@ -83,9 +83,11 @@
     $('edit-pane').hidden = isPreview; $('preview-pane').hidden = !isPreview;
     document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
   }));
-  $('publish-note').addEventListener('click', () => {
+  $('publish-note').addEventListener('click', async () => {
     try {
-      const n = read(); C.validate(n); flush();
+      const n = read(); C.validate(n);
+      if (!publishedReady) {error('文章列表尚未加载，请稍后重试或刷新页面。'); return;}
+      if (!save()) return;
       const plan = C.publication(n, publishedSlugs.has(n.slug));
       $('publish-filename').textContent = n.slug + '.md';
       $('publish-source').value = plan.raw; $('github-edit').href = plan.url;
@@ -94,7 +96,15 @@
       $('publish-instructions').textContent = plan.prefilled
         ? '文章已准备好。前往 GitHub 后，检查内容并点击 Commit changes 确认提交即可。'
         : '先复制文章内容，再前往 GitHub，将编辑区内容全选替换并粘贴，点击 Commit changes 确认提交。';
-      $('publish-dialog').showModal();
+      if (plan.prefilled) {window.location.assign(plan.url); return;}
+      try {
+        await navigator.clipboard.writeText(plan.raw);
+        window.location.assign(plan.url);
+      } catch {
+        $('publish-instructions').textContent = '浏览器未允许自动复制。请复制下方内容，再前往 GitHub 粘贴并确认提交。';
+        $('publish-dialog').showModal();
+        $('publish-fallback').open = true; $('publish-source').focus(); $('publish-source').select();
+      }
     } catch (e) {error(e.message);}
   });
   $('download-publish').addEventListener('click', () => { try {const n=read(); C.validate(n); download(n, false);} catch(e) {error(e.message);} });
@@ -113,7 +123,7 @@
   const openingId = current.id, openingUpdated = current.updated;
   fetch('published.json', {cache:'no-cache'}).then(r => {if (!r.ok) throw new Error(); return r.json();}).then(notes => {
     if (!Array.isArray(notes)) throw new Error();
-    publishedSlugs = new Set(notes.map(n => n.slug));
+    publishedSlugs = new Set(notes.map(n => n.slug)); publishedReady = true;
     $('published-status').textContent = '打开后创建本地副本，提交前不会改变线上文章。';
     const requested = new URLSearchParams(window.location.search).get('edit');
     if (requested && !dirty && current.id === openingId && current.updated === openingUpdated) {

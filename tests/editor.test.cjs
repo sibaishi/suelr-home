@@ -32,8 +32,8 @@ test('publish rejects path traversal, frontmatter injection, empty body and inva
 });
 
 const vm = require('node:vm');
-function workspace(initial, {blocked=false}={}) {
-  const elements = new Map(), handlers = {}, writes = [];
+function workspace(initial, {blocked=false, notes=[], clipboardDenied=false}={}) {
+  const elements = new Map(), handlers = {}, writes = [], urls = [], copied = [];
   class Element {
     constructor() {this.value='';this.textContent='';this.children=[];this.listeners={};this.files=[];}
     addEventListener(name,fn) {this.listeners[name]=fn;}
@@ -41,6 +41,7 @@ function workspace(initial, {blocked=false}={}) {
     replaceChildren() {this.children=[];}
     setAttribute() {}
     focus() {}
+    select() {}
     showModal() {this.open=true;}
     close() {this.open=false;}
     remove() {}
@@ -50,10 +51,11 @@ function workspace(initial, {blocked=false}={}) {
   const context={NoteCore:C,crypto:require('node:crypto').webcrypto,Date,Blob,URL,console,
     localStorage:{getItem:()=>initial,setItem:(key,value)=>{if(blocked)throw new Error('quota');writes.push(JSON.parse(value));}},
     document:{getElementById:get,querySelectorAll:()=>[],createElement:()=>new Element(),body:new Element()},
-    URLSearchParams,window:{location:{search:''},addEventListener:(event,fn)=>{handlers[event]=fn;}},
-    fetch:async()=>({ok:true,json:async()=>[]}),confirm:()=>true,setTimeout:()=>1,clearTimeout:()=>{}};
+    navigator:{clipboard:{writeText:async text=>{if(clipboardDenied)throw new Error('denied');copied.push(text);}}},
+    URLSearchParams,window:{location:{search:'',assign:url=>urls.push(url)},addEventListener:(event,fn)=>{handlers[event]=fn;}},
+    fetch:async()=>({ok:true,json:async()=>notes}),confirm:()=>true,setTimeout:()=>1,clearTimeout:()=>{}};
   vm.runInNewContext(readFileSync('editor/editor.js','utf8'),context);
-  return {get,writes,handlers,click:id=>get(id).listeners.click(),input:()=>get('note-form').listeners.input()};
+  return {get,writes,handlers,urls,copied,click:id=>get(id).listeners.click(),input:()=>get('note-form').listeners.input()};
 }
 test('workspace restores drafts, saves edits and creates independent drafts', () => {
   const w=workspace(null); w.get('title').value='本地草稿'; w.input(); w.click('save-note');
@@ -96,4 +98,29 @@ test('publishing prefills new notes and routes existing notes to their editor', 
   const edit=C.publication(n,true);
   assert.equal(edit.url,'https://github.com/sibaishi/suelr-home/edit/main/content/designing-order.md');
   assert.equal(C.parse(edit.raw).draft,false);
+});
+
+function fillPublish(w) {
+  Object.assign(w.get('title'),{value:'Hello'});
+  for (const [key,value] of Object.entries({slug:'test-note',summary:'Summary',label:'Note',category:'设计与创作',body:'Hello world'})) w.get(key).value=value;
+  w.input();
+}
+test('publish goes straight to GitHub with a saved, prefilled new article', async () => {
+  const w=workspace(null); await new Promise(setImmediate); fillPublish(w);
+  await w.click('publish-note');
+  assert.equal(w.urls.length,1); assert.ok(w.urls[0].includes('/new/main?'));
+  assert.equal(w.get('publish-dialog').open,undefined);
+  assert.equal(w.writes.at(-1)[0].body,'Hello world');
+});
+test('existing article is copied automatically before opening GitHub edit page', async () => {
+  const w=workspace(null,{notes:[{slug:'test-note',title:'Hello',raw:''}]});
+  await new Promise(setImmediate); fillPublish(w); await w.click('publish-note');
+  assert.equal(w.copied.length,1);assert.ok(w.copied[0].includes('draft: false'));
+  assert.equal(w.urls[0],'https://github.com/sibaishi/suelr-home/edit/main/content/test-note.md');
+});
+test('clipboard denial keeps draft and exposes selected content instead of a failed redirect', async () => {
+  const w=workspace(null,{notes:[{slug:'test-note',title:'Hello',raw:''}],clipboardDenied:true});
+  await new Promise(setImmediate);fillPublish(w);await w.click('publish-note');
+  assert.equal(w.urls.length,0);assert.equal(w.get('publish-dialog').open,true);
+  assert.equal(w.get('publish-fallback').open,true);assert.ok(w.get('publish-source').value.includes('Hello world'));
 });
